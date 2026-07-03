@@ -685,10 +685,7 @@ function callServer(action, data, callback) {
         logout();
         return;
       }
-      // [FIX] แกะ envelope {success, data} ให้ handler ได้ payload ชั้นในตรง ๆ
-      var payload = (result && result.success === true && result.data !== undefined)
-                    ? result.data : result;
-      callback(payload);
+      callback(result);
     })
     .withFailureHandler(function(err) { callback({ success: false, message: err.message }); })
     .processAction(action, data);
@@ -2648,6 +2645,7 @@ function catFetch(btn) {
   st.style.color = '#666'; st.textContent = '⏳ กำลังดึงรายการ...';
   if (btn) btn.disabled = true;
   callServer('fetchCatalog', { url: url }, function(r) {
+        if (r && r.success === true && r.data !== undefined) r = r.data;
     if (btn) btn.disabled = false;
     if (!r || !r.ok) { st.style.color = '#c00'; st.textContent = '❌ ' + ((r && r.error) || 'ดึงไม่สำเร็จ'); return; }
     st.style.color = '#0f6e56'; st.textContent = '✅ พบ ' + r.count + ' รายการ · ยึด PRODUCT_CODE เป็นมาตรฐาน';
