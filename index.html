@@ -2649,7 +2649,12 @@ function catFetch(btn) {
     if (btn) btn.disabled = false;
     if (!r || !r.ok) { st.style.color = '#c00'; st.textContent = '❌ ' + ((r && r.error) || 'ดึงไม่สำเร็จ'); return; }
     st.style.color = '#0f6e56'; st.textContent = '✅ พบ ' + r.count + ' รายการ · ยึด PRODUCT_CODE เป็นมาตรฐาน';
-    APP.catItems = r.items || [];
+      APP.catItems = (r.items || []).slice().sort(function(a, b) {
+         var na = parseInt((a.category || '').split('.')[0], 10); if (isNaN(na)) na = 9999;
+         var nb = parseInt((b.category || '').split('.')[0], 10); if (isNaN(nb)) nb = 9999;
+         if (na !== nb) return na - nb;              // เรียงตามเลขหมวด 1,2,3...
+         return (a.code || '').localeCompare(b.code || '');  // ในหมวดเดียวกันเรียงตามรหัสสินค้า
+});
     APP.catOpen = {};
     if (APP.catItems.length) APP.catOpen[APP.catItems[0].category || 'ไม่ระบุหมวด'] = true;
     document.getElementById('catTools').classList.remove('hidden');
