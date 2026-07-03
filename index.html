@@ -981,7 +981,7 @@ function showPage(pageId) {
 document.addEventListener('DOMContentLoaded', function() {
   if (!restoreSession()) {   // [SESSION PERSIST] ไม่มี session → เตรียมหน้า login
     try {                    // [LOGIN UX] จำ username ล่าสุด เติมให้อัตโนมัติ
-      var lastU = localStorage.getItem('wbtisrt_last_user');
+      var lastU = localStorage.getItem('wbtistr_last_user');
       if (lastU) {
         var uEl = document.getElementById('loginUsername');
         if (uEl) { uEl.value = lastU; var pEl = document.getElementById('loginPassword'); if (pEl) pEl.focus(); }
@@ -1005,7 +1005,7 @@ function enterApp(user, isFreshLogin) {
 }
 
 // [SESSION PERSIST] เก็บ/อ่าน/ล้าง session ใน localStorage
-var SESSION_KEY = 'wbtisrt_session';
+var SESSION_KEY = 'wbtistr_session';
 function saveSession() {
   try { localStorage.setItem(SESSION_KEY, JSON.stringify({ token: APP.token, user: APP.user })); } catch(e) {}
 }
@@ -1042,7 +1042,7 @@ function doLogin(btn) {
           APP.user = result.user;
           APP.token = result.token;   // [SEC v1103] เก็บ session token
           saveSession();              // [SESSION PERSIST] เก็บลง localStorage
-          try { localStorage.setItem('wbtisrt_last_user', username); } catch(e) {}  // [LOGIN UX] จำ username
+          try { localStorage.setItem('wbtistr_last_user', username); } catch(e) {}  // [LOGIN UX] จำ username
           enterApp(result.user, true);
         } else {
           showToast((result && result.message) || 'เข้าสู่ระบบไม่สำเร็จ', 'error');
@@ -2255,9 +2255,9 @@ function loadUsers() {
             return '<label style="display:flex;align-items:center;gap:4px;font-size:13px"><input type="checkbox" class="uscope_' + uid + '" value="' + esc(g) + '"' + (_cur[g] ? ' checked' : '') + '>' + esc(g) + '</label>';
           }).join('');
           panel += '<div style="height:10px"></div>' +
-            '<div class="form-group"><label class="form-label">🎯 กลุ่มที่ดูแล (ชั้น/ห้อง)</label>' +
+            '<div class="form-group"><label class="form-label">🎯 กลุ่มที่ดูแล (' + (PROFILE.groupLabel || 'กลุ่ม') + ')</label>' +
             '<div style="display:flex;flex-wrap:wrap;gap:8px">' + _boxes + '</div>' +
-            '<div style="color:#888;font-size:12px;margin-top:4px">ไม่ติ๊ก = ดูแลทุกห้อง</div></div>' +
+            '<div style="color:#888;font-size:12px;margin-top:4px">ไม่ติ๊ก = ดูแลทุก' + (PROFILE.mode === 'school' ? 'ห้อง' : 'โซน') + '</div></div>' +
             '<button class="btn btn-primary" onclick="saveUserScope(\'' + uid + '\',this)">💾 บันทึกกลุ่ม</button>';
         }
       }
@@ -2279,7 +2279,7 @@ function loadUsers() {
 
 function loadScopeGroups(cb) {
   callServer('getOperatorScopeOptions', {}, function(r) {
-    APP._scopeGroups = (r.success && r.data && r.data.mode === 'school' && r.data.groups && r.data.groups.length) ? r.data.groups : null;
+    APP._scopeGroups = (r.success && r.data && r.data.groups && r.data.groups.length) ? r.data.groups : null;
     cb();
   });
 }
@@ -2321,11 +2321,11 @@ function setUserStatus(username, status, btn) {
   });
 }
 function resetUserPwd(username, btn) {
-  if (!confirm('รีเซ็ตรหัสผ่านของ @' + username + ' เป็น "changeme1"? ผู้ใช้จะต้องตั้งรหัสใหม่ตอน login')) return;
+  if (!confirm('รีเซ็ตรหัสผ่านของ @' + username + ' เป็นรหัสตาม role? ผู้ใช้จะต้องตั้งรหัสใหม่ตอน login')) return;
   btn.disabled = true;
   callServer('resetPassword', { targetUsername: username }, function(r) {
     btn.disabled = false;
-    if (r.success) showToast('รีเซ็ตรหัสผ่านเป็น changeme1 แล้ว', 'success');
+    if (r.success) showToast(r.message || 'รีเซ็ตรหัสผ่านแล้ว', 'success');
     else showToast(r.message, 'error');
   });
 }
@@ -2400,10 +2400,10 @@ function showBulkUserForm() {
   document.getElementById('addUserForm').classList.add('hidden');
   var bf = document.getElementById('bulkUserForm');
   bf.classList.remove('hidden');
-  var hint = (APP._scopeGroups && APP._scopeGroups.length) ? ('<div style="font-size:12px;color:#16a34a;margin-top:4px">ชั้นที่ใช้ได้: ' + esc(APP._scopeGroups.join(', ')) + '</div>') : '';
+  var hint = (APP._scopeGroups && APP._scopeGroups.length) ? ('<div style="font-size:12px;color:#16a34a;margin-top:4px">' + (PROFILE.groupLabel || 'กลุ่ม') + 'ที่ใช้ได้: ' + esc(APP._scopeGroups.join(', ')) + '</div>') : '';
   bf.innerHTML =
     '<div class="card"><div class="card-title">📥 นำเข้าผู้ใช้หลายคน</div>' +
-    '<div style="font-size:13px;color:#555;line-height:1.6">กรอก 1 คนต่อ 1 แถว · เลือก role ได้ · รหัสเริ่มต้น changeme1<br>ช่อง “ชั้นที่ดูแล” ใช้กับ operator/viewer เท่านั้น (หลายชั้นคั่นด้วย ; · เว้นว่าง = ทุกห้อง)</div>' +
+    '<div style="font-size:13px;color:#555;line-height:1.6">กรอก 1 คนต่อ 1 แถว · เลือก role ได้ · เว้นรหัส = ตาม role (operator o12345 · viewer v12345 · manager m12345 · admin a12345)<br>ช่อง “' + (PROFILE.groupLabel || 'กลุ่ม') + 'ที่ดูแล” ใช้กับ operator/viewer เท่านั้น (หลายกลุ่มคั่นด้วย ; · เว้นว่าง = ทุก' + (PROFILE.mode === 'school' ? 'ห้อง' : 'โซน') + ')</div>' +
     hint +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' +
       '<button class="btn btn-outline" onclick="bulkDownloadTemplate(this)" style="flex:1;min-width:150px">⬇ ดาวน์โหลดแม่แบบ</button>' +
@@ -2426,7 +2426,7 @@ function bulkAddRow() {
     '<select class="form-select bu-role" onchange="buRoleChange(this)" style="width:auto;min-width:96px">' +
       '<option value="operator">operator</option><option value="viewer">viewer</option>' +
       '<option value="manager">manager</option><option value="admin">admin</option></select>' +
-    '<input class="form-input bu-scope" placeholder="ชั้น เช่น ป.4 หรือ ป.5;ป.6" style="flex:1;min-width:120px">' +
+    '<input class="form-input bu-scope" placeholder="' + (PROFILE.mode === 'school' ? 'ชั้น เช่น ป.4 หรือ ป.5;ป.6' : 'โซน เช่น หมู่ที่ 1 หรือ หมู่ที่ 1;หมู่ที่ 2') + '" style="flex:1;min-width:120px">' +
     '<button class="btn-refresh bu-del" title="ลบแถว">✕</button>';
   c.appendChild(div);
   div.querySelector('.bu-del').addEventListener('click', function() { div.remove(); });
@@ -2473,7 +2473,7 @@ function showAddUserForm() {
   document.getElementById('addUserForm').innerHTML =
     '<div class="card"><div class="card-title">👤 เพิ่มผู้ใช้ใหม่</div>' +
     '<div class="form-group"><label class="form-label">Username</label><input type="text" id="newUsername" class="form-input" placeholder="ภาษาอังกฤษ a-z 0-9 _"></div>' +
-    '<div class="form-group"><label class="form-label">รหัสผ่านเริ่มต้น</label><input type="text" id="newUserPassword" class="form-input" value="changeme1"></div>' +
+    '<div class="form-group"><label class="form-label">รหัสผ่านเริ่มต้น</label><input type="text" id="newUserPassword" class="form-input" placeholder="เว้นว่าง = ตาม role (o/v/m/a 12345)"></div>' +
     '<div class="form-group"><label class="form-label">ชื่อแสดง</label><input type="text" id="newUserDisplay" class="form-input" placeholder="ชื่อภาษาไทย"></div>' +
     '<div class="form-group"><label class="form-label">สิทธิ์ (role)</label><select id="newUserRole" class="form-select" onchange="toggleMemberRef()">' +
       '<option value="operator">Operator</option><option value="manager">Manager</option>' +
@@ -2484,9 +2484,9 @@ function showAddUserForm() {
       '<div id="newUserMemberResults" class="search-results"></div>' +
       '<input type="hidden" id="newUserMemberRef">' +
       '<div id="newUserMemberPicked" style="margin-top:6px;color:#16a34a;font-size:13px"></div></div>' +
-    '<div class="form-group hidden" id="scopeGroup"><label class="form-label">กลุ่มที่ดูแล (ชั้น/ห้อง)</label>' +
+    '<div class="form-group hidden" id="scopeGroup"><label class="form-label">กลุ่มที่ดูแล (' + (PROFILE.groupLabel || 'กลุ่ม') + ')</label>' +
       '<div id="scopeBoxes" style="display:flex;flex-wrap:wrap;gap:8px"></div>' +
-      '<div style="color:#888;font-size:12px;margin-top:4px">ไม่ติ๊ก = ดูแลทุกห้อง</div></div>' +
+      '<div style="color:#888;font-size:12px;margin-top:4px">ไม่ติ๊ก = ดูแลทุก' + (PROFILE.mode === 'school' ? 'ห้อง' : 'โซน') + '</div></div>' +
     '<button class="btn btn-primary" onclick="createUser(this)">✓ เพิ่มผู้ใช้</button></div>';
   loadScopeOptions();
 }
@@ -2529,7 +2529,7 @@ var _scopeAvailable = false;
 function loadScopeOptions() {
   _scopeAvailable = false;
   callServer('getOperatorScopeOptions', {}, function(r) {
-    if (!r.success || !r.data || r.data.mode !== 'school' || !(r.data.groups || []).length) return;
+    if (!r.success || !r.data || !(r.data.groups || []).length) return;
     _scopeAvailable = true;
     document.getElementById('scopeBoxes').innerHTML = r.data.groups.map(function(g) {
       return '<label style="display:flex;align-items:center;gap:4px;font-size:13px">' +
