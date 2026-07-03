@@ -685,7 +685,10 @@ function callServer(action, data, callback) {
         logout();
         return;
       }
-      callback(result);
+      // [FIX] แกะ envelope {success, data} ให้ handler ได้ payload ชั้นในตรง ๆ
+      var payload = (result && result.success === true && result.data !== undefined)
+                    ? result.data : result;
+      callback(payload);
     })
     .withFailureHandler(function(err) { callback({ success: false, message: err.message }); })
     .processAction(action, data);
