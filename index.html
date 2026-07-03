@@ -2374,7 +2374,7 @@ function bulkLoadFromAoa(aoa) {
   if (headerIdx === -1) { showToast('ไม่พบหัวคอลัมน์ username ในไฟล์', 'error'); return; }
   var head = (aoa[headerIdx] || []).map(function(h) { return String(h || '').trim().toLowerCase(); });
   function col(m) { for (var k = 0; k < head.length; k++) if (head[k].indexOf(m) !== -1) return k; return -1; }
-  var cU = col('username'), cN = col('ชื่อแสดง'), cR = col('role'), cP = col('รหัสผ่าน'), cS = col('กลุ่มที่ดูแล');
+  var cU = col('username'), cN = col('ชื่อแสดง'), cR = col('role'), cP = col('รหัสผ่าน'), cS = col('ที่ดูแล');
   document.getElementById('bulkRows').innerHTML = '';
   var n = 0;
   for (var r = headerIdx + 1; r < aoa.length; r++) {
