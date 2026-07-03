@@ -730,7 +730,7 @@ function dsRender(d) {
     document.getElementById('dsContent').innerHTML = '<div style="padding:24px;text-align:center;color:#888">ไม่มีการฝากขยะในวันนี้</div>';
     return;
   }
-  var gw = esc(d.groupWord || 'ชั้น'), nw = esc(d.noWord || 'เลขที่');
+  var gw = esc(d.groupWord || 'ชั้น'), nw = esc(d.noWord || (PROFILE.enableClassNo ? 'เลขที่' : 'เลขสมาชิก'));
   var html = '';
   d.classes.forEach(function(C) {
     html += '<div style="border:1px solid #e5e7eb;border-radius:13px;overflow:hidden;margin-bottom:14px">';
@@ -847,7 +847,7 @@ function wsRender(d) {
     document.getElementById('wsContent').innerHTML = '<div style="padding:24px;text-align:center;color:#888">ไม่มีการถอนเงินในวันนี้</div>';
     return;
   }
-  var gw = esc(d.groupWord || 'ชั้น'), nw = esc(d.noWord || 'เลขที่');
+  var gw = esc(d.groupWord || 'ชั้น'), nw = esc(d.noWord || (PROFILE.enableClassNo ? 'เลขที่' : 'เลขสมาชิก'));
   var html = '';
   d.classes.forEach(function(C) {
     html += '<div style="border:1px solid #e5e7eb;border-radius:13px;overflow:hidden;margin-bottom:14px">';
@@ -1342,7 +1342,7 @@ function searchMemberFor(context, force) {
       if (levelClasses) { var aset = {}; levelClasses.forEach(function(c) { aset[c] = true; }); list = list.filter(function(m) { return aset[m.classLabel]; }); }
       var html = list.map(function(m) {
         var cls = m.classLabel ? (' · ' + esc(m.classLabel)) : '';
-        var no = (m.classNo !== undefined && m.classNo !== null && String(m.classNo) !== '') ? (' เลขที่ ' + esc(m.classNo)) : '';
+        var no = (m.classNo !== undefined && m.classNo !== null && String(m.classNo) !== '') ? ((PROFILE.enableClassNo ? ' เลขที่ ' : ' เลขสมาชิก ') + esc(m.classNo)) : '';
         return '<div class="search-result" onclick="selectMemberFor(\'' + context + '\',\'' + esc(m.memberId) + '\')">' +
           '<div class="list-title">' + esc(m.fullName) + cls + no + '</div>' +
           '<div class="list-subtitle">' + PROFILE.idLabel + ' ' + esc(m.houseNo) + ' | ' + esc(m.zone) + ' | ฿' + (m.balance||0).toLocaleString() + ' | ' + (m.points||0).toLocaleString() + ' แต้ม</div></div>';
