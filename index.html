@@ -553,7 +553,7 @@
 // ════════════════════════════════════════════════════════════════════════
 
 // 🔧 วาง URL /exec ของคุณตรงนี้ (เส้นเดียวกับที่ใช้ทดสอบใน test.html)
-var API_URL = "https://script.google.com/macros/s/AKfycbxmuAO71Jcpa2CH_eHcleU4YIBqmpOb6yYMnksE-3kCGTl3WBHhm8I6ozWFmD7He66_mA/exec";
+var API_URL = "https://script.google.com/macros/s/AKfycbyjL_mkuYcAnFW6VEGgqc80gG6Tuoeh5i4tdPQoGGzYKl0h3dX9iBXEn1sMiAheX9d4Uw/exec";
 
 function apiFetch(action, data) {
   data = data || {};
@@ -740,7 +740,16 @@ function dsRender(d) {
       html += '<div style="display:flex;justify-content:space-between"><span style="font-weight:bold">' + esc(M.fullName) + '</span><span style="font-size:12px;color:#6b7280">' + nw + ' ' + esc(M.classNo || '-') + '</span></div>';
       html += '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:5px">';
       M.items.forEach(function(it) {
-        html += '<tr><td style="padding:3px 0">' + esc(it.wasteType) + '</td><td style="text-align:right;color:#6b7280;white-space:nowrap">฿' + (it.price || 0) + '/กก.</td><td style="text-align:right;width:82px">' + (it.weight || 0).toFixed(2) + ' กก.</td><td style="text-align:right;width:84px;font-weight:bold">฿' + (it.amount || 0).toFixed(2) + '</td></tr>';
+        var _u = depUnitOf(it.wasteType), _priceCell, _qtyCell;
+        if (_u !== 'กก.' && it.price) {
+          var _q = Math.round((it.amount || 0) / it.price * 100) / 100;
+          _priceCell = '฿' + (it.price || 0) + '/' + esc(_u);
+          _qtyCell = _q + ' ' + esc(_u) + ' <span style="color:#9ca3af">(' + (it.weight || 0).toFixed(2) + ' กก.)</span>';
+        } else {
+          _priceCell = '฿' + (it.price || 0) + '/กก.';
+          _qtyCell = (it.weight || 0).toFixed(2) + ' กก.';
+        }
+        html += '<tr><td style="padding:3px 0">' + esc(it.wasteType) + '</td><td style="text-align:right;color:#6b7280;white-space:nowrap">' + _priceCell + '</td><td style="text-align:right;width:118px">' + _qtyCell + '</td><td style="text-align:right;width:84px;font-weight:bold">฿' + (it.amount || 0).toFixed(2) + '</td></tr>';
       });
       html += '</table>';
       html += '<div style="display:flex;justify-content:flex-end;gap:16px;font-size:13px;margin-top:5px;color:#15803d;font-weight:bold;border-top:1px dashed #e5e7eb;padding-top:5px"><span>รวม ' + (M.weight || 0).toFixed(2) + ' กก.</span><span>฿' + (M.amount || 0).toFixed(2) + '</span></div>';
@@ -1537,13 +1546,25 @@ function showHistory(memberId) {
         var cls = positive ? 'positive' : 'negative';
         var sign = positive ? '+' : '−';
         var pts = t.pointsEarned ? ' (' + (t.pointsEarned > 0 ? '+' : '') + t.pointsEarned + ' แต้ม)' : '';
+        // [UNIT] แสดงจำนวน/น้ำหนักต่อรายการ (ฝากที่มีน้ำหนัก): หน่วยลัง → "3 ลัง (45 กก.)"
+        var qtyInfo = '';
+        if (t.wasteType && t.wasteType !== '-' && (t.weight || 0) > 0) {
+          var _hu = depUnitOf(t.wasteType);
+          var _pr = priceOf(t.wasteType) || {};
+          (APP._txMeta = APP._txMeta || {})[t.transId] = { unit: _hu, uw: parseFloat(_pr.unitWeight) || 0, price: t.price || 0, amount: amt, weight: t.weight || 0 };
+          if (_hu !== 'กก.' && t.price) {
+            qtyInfo = ' · ' + (Math.round(Math.abs(amt) / t.price * 100) / 100) + ' ' + esc(_hu) + ' (' + (t.weight || 0).toFixed(2) + ' กก.)';
+          } else {
+            qtyInfo = ' · ' + (t.weight || 0).toFixed(2) + ' กก.';
+          }
+        }
         var tag = edited ? ' <span style="color:#f57c00">• แก้แล้ว</span>' : (isReversal ? ' <span style="color:#999">• ยกเลิก</span>' : '');
         var btn = (canEdit && t.editable)
           ? '<button class="btn-refresh" style="margin-left:8px" title="แก้น้ำหนัก" onclick="editWeight(\'' + t.transId + '\',\'' + memberId + '\',' + (t.weight||0) + ')">✏️</button>'
           : '';
         html += '<div class="list-item"><div class="list-icon">' + icon + '</div><div class="list-content">' +
           '<div class="list-title">' + t.type + (t.wasteType !== '-' ? ': ' + esc(t.wasteType) : '') + tag + '</div>' +
-          '<div class="list-subtitle">' + t.createdAt + pts + '</div></div>' +
+          '<div class="list-subtitle">' + t.createdAt + qtyInfo + pts + '</div></div>' +
           '<div class="list-value ' + cls + '">' + sign + '฿' + Math.abs(amt).toLocaleString() + '</div>' + btn + '</div>';
       });
     }
@@ -1555,15 +1576,29 @@ function showHistory(memberId) {
 
 // [tx_edit] แก้น้ำหนักรายการฝาก (เฉพาะผู้มีสิทธิ์ tx_edit — server ตรวจซ้ำอีกชั้น)
 function editWeight(transId, memberId, oldWeight) {
-  var v = prompt('แก้น้ำหนักรายการนี้\nน้ำหนักเดิม: ' + oldWeight + ' กก.\n\nใส่น้ำหนักใหม่ (กก.):', oldWeight);
-  if (v === null) return;
-  var w = parseFloat(v);
-  if (!w || w <= 0) { showToast('น้ำหนักไม่ถูกต้อง', 'error'); return; }
-  if (w === parseFloat(oldWeight)) { showToast('น้ำหนักเท่ากับของเดิม', 'error'); return; }
-  if (!confirm('ยืนยันแก้น้ำหนัก ' + oldWeight + ' → ' + w + ' กก.?\nระบบจะยกเลิกรายการเดิมและออกรายการใหม่ให้')) return;
-  callServer('correctDepositWeight', { transId: transId, newWeight: w }, function(r) {
+  var m = (APP._txMeta || {})[transId] || {};
+  var unitBased = (m.unit && m.unit !== 'กก.' && m.uw > 0);
+  var newWeight;
+  if (unitBased) {
+    var oldQty = m.price ? Math.round(Math.abs(m.amount) / m.price * 100) / 100 : Math.round(oldWeight / m.uw * 100) / 100;
+    var vq = prompt('แก้จำนวนรายการนี้\nจำนวนเดิม: ' + oldQty + ' ' + m.unit + '\n\nใส่จำนวนใหม่ (' + m.unit + '):', oldQty);
+    if (vq === null) return;
+    var q = parseFloat(vq);
+    if (!q || q <= 0) { showToast('จำนวนไม่ถูกต้อง', 'error'); return; }
+    newWeight = Math.round(q * m.uw * 100) / 100;
+    if (Math.abs(newWeight - parseFloat(oldWeight)) < 0.001) { showToast('จำนวนเท่ากับของเดิม', 'error'); return; }
+    if (!confirm('ยืนยันแก้ ' + oldQty + ' → ' + q + ' ' + m.unit + ' (' + newWeight + ' กก.)?\nระบบจะยกเลิกรายการเดิมและออกรายการใหม่ให้')) return;
+  } else {
+    var v = prompt('แก้น้ำหนักรายการนี้\nน้ำหนักเดิม: ' + oldWeight + ' กก.\n\nใส่น้ำหนักใหม่ (กก.):', oldWeight);
+    if (v === null) return;
+    newWeight = parseFloat(v);
+    if (!newWeight || newWeight <= 0) { showToast('น้ำหนักไม่ถูกต้อง', 'error'); return; }
+    if (newWeight === parseFloat(oldWeight)) { showToast('น้ำหนักเท่ากับของเดิม', 'error'); return; }
+    if (!confirm('ยืนยันแก้น้ำหนัก ' + oldWeight + ' → ' + newWeight + ' กก.?\nระบบจะยกเลิกรายการเดิมและออกรายการใหม่ให้')) return;
+  }
+  callServer('correctDepositWeight', { transId: transId, newWeight: newWeight }, function(r) {
     if (!r || !r.success) { showToast((r && r.message) || 'แก้ไม่สำเร็จ', 'error'); return; }
-    showToast(r.message || 'แก้น้ำหนักสำเร็จ', 'success');
+    showToast(r.message || 'แก้สำเร็จ', 'success');
     showHistory(memberId);
   });
 }
@@ -1580,45 +1615,131 @@ function selectDepositMember(memberId) {
       '<div class="balance-info">' + PROFILE.idLabel + ' ' + esc(r.data.houseNo) + ' | ' + esc(r.data.zone) + ' | ยอดปัจจุบัน ฿' + r.data.currentBalance.toLocaleString() + '</div>';
     document.getElementById('depositForm').classList.remove('hidden');
     APP.depositItems = [];
+    document.getElementById('depositItems').innerHTML = '';   // ล้างรายการเดิม กัน DOM/ID ซ้ำ (แก้ "รายการที่ 1 ซ้ำ" + ช่องไม่คำนวณ)
+    var _dn = document.getElementById('depositNote'); if (_dn) _dn.value = '';
     addDepositItem();
+    updateDepositSummary();
   });
 }
 
 function addDepositItem() {
   var idx = APP.depositItems.length;
-  APP.depositItems.push({ wasteName: '', weight: 0 });
+  APP.depositItems.push({ wasteName: '', weight: 0, qty: 0, unit: 'กก.', unitWeight: 0 });
   var options = APP.prices.filter(function(p) { return p.price > 0; }).map(function(p) { return '<option value="' + esc(p.name) + '">' + esc(p.name) + ' (' + esc(p.category) + ') - ฿' + p.price + '/' + esc(p.unit) + '</option>'; }).join('');
   var html = '<div class="deposit-item" id="depItem' + idx + '">' +
     '<div class="deposit-item-header"><span class="deposit-item-title">รายการที่ ' + (idx+1) + '</span><span class="deposit-item-remove" onclick="removeDepositItem(' + idx + ')">✕</span></div>' +
-    '<div class="form-group"><select class="form-select" onchange="APP.depositItems[' + idx + '].wasteName=this.value;updateDepositSummary()"><option value="">-- เลือกประเภทขยะ --</option>' + options + '</select></div>' +
-    '<div class="form-group"><input type="number" class="form-input" placeholder="น้ำหนัก (กก.)" step="0.01" min="0.01" oninput="APP.depositItems[' + idx + '].weight=parseFloat(this.value)||0;updateDepositSummary()"></div></div>';
+    '<div class="form-group"><select class="form-select" onchange="onDepositTypeChange(' + idx + ',this)"><option value="">-- เลือกประเภทขยะ --</option>' + options + '</select></div>' +
+    '<div id="depInputs' + idx + '"><div class="form-group"><input type="number" class="form-input" placeholder="น้ำหนัก (กก.)" step="0.01" min="0.01" oninput="depSetWeight(' + idx + ',this.value)"></div></div>' +
+    '</div>';
   document.getElementById('depositItems').insertAdjacentHTML('beforeend', html);
+  renumberDepositItems();
+}
+
+// [FIX] เรียงเลข "รายการที่ N" ใหม่ให้ต่อเนื่องหลังเพิ่ม/ลบ
+function renumberDepositItems() {
+  var els = document.getElementById('depositItems').querySelectorAll('.deposit-item-title');
+  Array.prototype.forEach.call(els, function(t, i) { t.textContent = 'รายการที่ ' + (i + 1); });
+}
+
+// [UNIT] เลือกประเภทขยะ → ปรับช่องกรอกตามหน่วย (กก. = ช่องเดียว ; ลัง/ชิ้น = จำนวน + น้ำหนักกก.แก้ได้)
+function onDepositTypeChange(idx, sel) {
+  var it = APP.depositItems[idx]; if (!it) return;
+  it.wasteName = sel.value;
+  var p = null; for (var k = 0; k < APP.prices.length; k++) { if (APP.prices[k].name === sel.value) { p = APP.prices[k]; break; } }
+  var unit = (p && p.unit) ? String(p.unit) : 'กก.';
+  var uw = p ? (parseFloat(p.unitWeight) || 0) : 0;
+  var unitBased = (unit !== 'กก.' && uw > 0);
+  it.unit = unit; it.unitWeight = uw; it.qty = 0; it.weight = 0;
+  var box = document.getElementById('depInputs' + idx);
+  if (unitBased) {
+    box.innerHTML =
+      '<div class="form-group"><input type="number" class="form-input" placeholder="จำนวน (' + esc(unit) + ')" step="0.01" min="0.01" oninput="depSetQty(' + idx + ',this.value)"></div>' +
+      '<div class="form-group"><input type="number" id="depKg' + idx + '" class="form-input" placeholder="น้ำหนัก (กก.) — 1 ' + esc(unit) + ' ≈ ' + uw + ' กก." step="0.01" min="0.01" oninput="depSetWeight(' + idx + ',this.value)"></div>';
+  } else {
+    box.innerHTML = '<div class="form-group"><input type="number" class="form-input" placeholder="น้ำหนัก (กก.)" step="0.01" min="0.01" oninput="depSetWeight(' + idx + ',this.value)"></div>';
+  }
+  updateDepositSummary();
+}
+
+// กรอกจำนวน (ลัง/ชิ้น) → คิดน้ำหนัก กก. เริ่มต้น = จำนวน × kg/หน่วย (เติมให้ แต่แก้ทับได้)
+function depSetQty(idx, v) {
+  var it = APP.depositItems[idx]; if (!it) return;
+  it.qty = parseFloat(v) || 0;
+  it.weight = Math.round(it.qty * it.unitWeight * 100) / 100;
+  var kg = document.getElementById('depKg' + idx);
+  if (kg && document.activeElement !== kg) kg.value = it.weight || '';
+  updateDepositSummary();
+}
+
+function depSetWeight(idx, v) {
+  var it = APP.depositItems[idx]; if (!it) return;
+  it.weight = parseFloat(v) || 0;
+  if (!(it.unit !== 'กก.' && it.unitWeight > 0)) it.qty = it.weight;   // รายการ กก.: จำนวน = น้ำหนัก
+  updateDepositSummary();
 }
 
 function removeDepositItem(idx) {
   var el = document.getElementById('depItem' + idx);
   if (el) el.remove();
   APP.depositItems[idx] = null;
+  renumberDepositItems();
   updateDepositSummary();
+}
+
+// [UNIT] หาหน่วยของประเภทขยะจาก APP.prices (fallback = กก.)
+function depUnitOf(name) {
+  if (APP && APP.prices) { for (var i = 0; i < APP.prices.length; i++) { if (APP.prices[i].name === name) return APP.prices[i].unit || 'กก.'; } }
+  return 'กก.';
+}
+
+// [FIX] อ่านรายการฝากจากช่องบนหน้าจอโดยตรง (กัน desync ระหว่าง DOM กับ state)
+function readDepositItems() {
+  var out = [];
+  var container = document.getElementById('depositItems');
+  if (!container) return out;
+  var els = container.querySelectorAll('.deposit-item');
+  Array.prototype.forEach.call(els, function(el) {
+    var sel = el.querySelector('select');
+    var name = sel ? sel.value : '';
+    if (!name) return;
+    var p = null; for (var k = 0; k < APP.prices.length; k++) { if (APP.prices[k].name === name) { p = APP.prices[k]; break; } }
+    var unit = (p && p.unit) ? String(p.unit) : 'กก.';
+    var uw = p ? (parseFloat(p.unitWeight) || 0) : 0;
+    var unitBased = (unit !== 'กก.' && uw > 0);
+    var inputs = el.querySelectorAll('input[type=number]');
+    var qty = 0, weight = 0;
+    if (unitBased) {
+      qty = parseFloat(inputs[0] ? inputs[0].value : '') || 0;
+      var kgVal = parseFloat(inputs[1] ? inputs[1].value : '') || 0;
+      weight = kgVal > 0 ? kgVal : Math.round(qty * uw * 100) / 100;
+    } else {
+      weight = parseFloat(inputs[0] ? inputs[0].value : '') || 0;
+      qty = weight;
+    }
+    if (weight > 0 || qty > 0) out.push({ wasteName: name, unit: unit, unitWeight: uw, qty: qty, weight: weight, price: p ? p.price : 0 });
+  });
+  return out;
 }
 
 function updateDepositSummary() {
   var total = 0;
-  var priceMap = {};
-  APP.prices.forEach(function(p) { priceMap[p.name] = p.price; });
-  APP.depositItems.forEach(function(item) {
-    if (item && item.wasteName && item.weight > 0) {
-      total += (priceMap[item.wasteName] || 0) * item.weight;
-    }
+  readDepositItems().forEach(function(it) {
+    var unitBased = (it.unit !== 'กก.' && it.unitWeight > 0);
+    total += (it.price || 0) * (unitBased ? it.qty : it.weight);
   });
   total = Math.round(total * 100) / 100;
-  document.getElementById('depositSummary').textContent = 'รวม ฿' + total.toLocaleString(undefined,{minimumFractionDigits:2});
+  document.getElementById('depositSummary').textContent = 'รวม ฿' + total.toLocaleString(undefined, { minimumFractionDigits: 2 });
 }
 
 function processDeposit(btn) {
   if (!APP.currentMember) { showToast('กรุณาเลือก' + PROFILE.subjectWord, 'error'); return; }
-  var items = APP.depositItems.filter(function(it) { return it && it.wasteName && it.weight > 0; });
-  if (items.length === 0) { showToast('กรุณาเพิ่มรายการขยะ', 'error'); return; }
+  var items = readDepositItems();   // [FIX] อ่านจากช่องจริง กัน desync
+  // [UNIT] รายการหน่วย≠กก.: ถ้าไม่ได้กรอกจำนวน แต่กรอกน้ำหนัก → คิดจำนวนจากน้ำหนัก÷(กก./หน่วย)
+  items.forEach(function(it) {
+    if (it.unit !== 'กก.' && it.unitWeight > 0 && (!it.qty || it.qty <= 0)) it.qty = Math.round(it.weight / it.unitWeight * 100) / 100;
+  });
+  items = items.filter(function(it) { return it.weight > 0; });
+  if (items.length === 0) { showToast('กรุณาเพิ่มรายการขยะ (เลือกประเภท + ใส่จำนวน/น้ำหนัก)', 'error'); return; }
   btn.disabled = true;
   callServer('processDeposit', { memberId: APP.currentMember.memberId, items: items, note: document.getElementById('depositNote').value }, function(r) {
     setTimeout(function() { btn.disabled = false; }, 30000);
@@ -1735,10 +1856,14 @@ function loadPricesForUpdate() {
     var html = '', currentCat = '';
     r.data.forEach(function(p, idx) {
       if (p.category !== currentCat) { currentCat = p.category; html += '<div class="category-header">' + esc(p.category) + '</div>'; }
-      html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0f0f0">' +
-        '<span style="flex:1;font-size:13px">' + esc(p.name) + '</span>' +
-        '<input type="number" class="form-input price-edit-input" data-name="' + esc(p.name) + '" value="' + p.price + '" style="width:100px;padding:8px" step="0.01" min="0">' +
-        '<span style="font-size:12px;color:#999">/' + esc(p.unit) + '</span></div>';
+      var unit = p.unit || 'กก.';
+      var uwField = (unit !== 'กก.')
+        ? '<input type="number" class="form-input price-uw-input" data-name="' + esc(p.name) + '" value="' + (p.unitWeight || '') + '" placeholder="กก./' + esc(unit) + '" title="น้ำหนัก (กก.) ต่อ 1 ' + esc(unit) + '" style="width:78px;padding:8px" step="0.01" min="0"><span style="font-size:11px;color:#999">กก./' + esc(unit) + '</span>'
+        : '';
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0f0f0;flex-wrap:wrap">' +
+        '<span style="flex:1;min-width:90px;font-size:13px">' + esc(p.name) + '</span>' +
+        '<input type="number" class="form-input price-edit-input" data-name="' + esc(p.name) + '" value="' + p.price + '" style="width:90px;padding:8px" step="0.01" min="0">' +
+        '<span style="font-size:12px;color:#999">฿/' + esc(unit) + '</span>' + uwField + '</div>';
     });
     document.getElementById('updatePriceList').innerHTML = html;
     document.getElementById('savePricesBtn').classList.remove('hidden');
@@ -1746,10 +1871,17 @@ function loadPricesForUpdate() {
 }
 
 function saveMultiplePrices(btn) {
+  var uwMap = {};
+  document.querySelectorAll('.price-uw-input').forEach(function(u) {
+    if (u.value !== '') uwMap[u.getAttribute('data-name')] = parseFloat(u.value) || 0;
+  });
   var inputs = document.querySelectorAll('.price-edit-input');
   var updates = [];
   inputs.forEach(function(inp) {
-    updates.push({ wasteName: inp.getAttribute('data-name'), price: parseFloat(inp.value) || 0 });
+    var name = inp.getAttribute('data-name');
+    var u = { wasteName: name, price: parseFloat(inp.value) || 0 };
+    if (uwMap[name] !== undefined) u.unitWeight = uwMap[name];
+    updates.push(u);
   });
   btn.disabled = true;
   callServer('updateMultiplePrices', { updates: updates }, function(r) {
@@ -1842,9 +1974,10 @@ function loadSellData() {
       var buyerOptions = r2.data.map(function(b) { return '<option value="' + esc(b.id) + '" data-name="' + esc(b.name) + '">' + esc(b.name) + '</option>'; }).join('');
       document.getElementById('sellForm').innerHTML =
         '<div style="font-weight:700;margin-bottom:8px">เพิ่มรายการขาย</div>' +
-        '<div class="form-group"><label class="form-label">ประเภทขยะ · (คงเหลือในสต๊อก)</label><select id="sellWaste" class="form-select" onchange="sellValidate()"><option value="">-- เลือก --</option></select></div>' +
+        '<div class="form-group"><label class="form-label">ประเภทขยะ · (คงเหลือในสต๊อก)</label><select id="sellWaste" class="form-select" onchange="onSellTypeChange()"><option value="">-- เลือก --</option></select></div>' +
+        '<div class="form-group hidden" id="sellQtyWrap"><label class="form-label" id="sellQtyLabel">จำนวน</label><input type="number" id="sellQty" class="form-input" step="0.01" min="0.01" oninput="onSellQty()"></div>' +
         '<div class="form-row"><div class="form-group"><label class="form-label">น้ำหนัก (กก.)</label><input type="number" id="sellWeight" class="form-input" step="0.01" min="0.01" oninput="sellValidate()"></div>' +
-        '<div class="form-group"><label class="form-label">ราคาขาย/กก. (พิมพ์เอง)</label><input type="number" id="sellPrice" class="form-input" step="0.01" min="0" oninput="sellValidate()"></div></div>' +
+        '<div class="form-group"><label class="form-label" id="sellPriceLabel">ราคาขาย/กก. (พิมพ์เอง)</label><input type="number" id="sellPrice" class="form-input" step="0.01" min="0" oninput="sellValidate()"></div></div>' +
         '<div id="sellWarn" class="hidden" style="font-size:13px;color:#a32d2d;background:#fdecec;border-radius:9px;padding:8px 10px;margin-bottom:10px"></div>' +
         '<button id="sellAddBtn" class="btn btn-primary" onclick="sellAddItem()" style="margin-bottom:14px">➕ เพิ่มรายการ</button>' +
         '<div style="border-top:1px solid #eee;padding-top:12px"><div style="font-weight:700;margin-bottom:6px">รายการขาย <span id="sellCartCount" style="color:#888;font-weight:400;font-size:13px"></span></div>' +
@@ -1870,19 +2003,45 @@ function sellRenderTypes() {
   }).join('');
   if (cur && APP.saleStockMap[cur] !== undefined) sel.value = cur;
 }
+// [UNIT] หา price object (unit/unitWeight) ของประเภทขยะ
+function priceOf(name) {
+  if (APP && APP.prices) { for (var i = 0; i < APP.prices.length; i++) { if (APP.prices[i].name === name) return APP.prices[i]; } }
+  return null;
+}
+function onSellTypeChange() {
+  var t = document.getElementById('sellWaste').value, p = priceOf(t);
+  var unit = (p && p.unit) ? p.unit : 'กก.', uw = p ? (parseFloat(p.unitWeight) || 0) : 0;
+  var unitBased = (unit !== 'กก.' && uw > 0);
+  document.getElementById('sellQtyWrap').classList.toggle('hidden', !unitBased);
+  document.getElementById('sellQtyLabel').textContent = 'จำนวน (' + unit + ')';
+  document.getElementById('sellPriceLabel').textContent = 'ราคาขาย/' + (unitBased ? unit : 'กก.') + ' (พิมพ์เอง)';
+  if (!unitBased) document.getElementById('sellQty').value = '';
+  sellValidate();
+}
+function onSellQty() {
+  var p = priceOf(document.getElementById('sellWaste').value), uw = p ? (parseFloat(p.unitWeight) || 0) : 0;
+  var q = parseFloat(document.getElementById('sellQty').value) || 0;
+  if (uw > 0) { var we = document.getElementById('sellWeight'); if (document.activeElement !== we) we.value = (Math.round(q * uw * 100) / 100) || ''; }
+  sellValidate();
+}
 function sellRenderCart() {
   var list = document.getElementById('sellCartList'); if (!list) return;
   var cart = APP.saleCart || [];
   if (!cart.length) { list.innerHTML = '<div style="text-align:center;color:#bbb;padding:16px;font-size:14px">ยังไม่มีรายการ</div>'; }
   else {
     list.innerHTML = cart.map(function(it, i) {
-      return '<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-top:1px solid #f1f1f1"><div style="flex:1"><div style="font-weight:700;font-size:14px">' + esc(it.wasteName) + '</div><div style="font-size:12px;color:#888">' + it.weight.toFixed(2) + ' กก. × ฿' + it.sellPrice + '/กก.</div></div>' +
-        '<div style="font-weight:700;color:#0f6e56;font-size:14px">฿' + (Math.round(it.weight * it.sellPrice * 100) / 100).toFixed(2) + '</div>' +
+      var ub = (it.unit && it.unit !== 'กก.' && it.unitWeight > 0);
+      var amt = Math.round((ub ? it.qty : it.weight) * it.sellPrice * 100) / 100;
+      var detail = ub
+        ? (it.qty + ' ' + esc(it.unit) + ' (' + it.weight.toFixed(2) + ' กก.) × ฿' + it.sellPrice + '/' + esc(it.unit))
+        : (it.weight.toFixed(2) + ' กก. × ฿' + it.sellPrice + '/กก.');
+      return '<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-top:1px solid #f1f1f1"><div style="flex:1"><div style="font-weight:700;font-size:14px">' + esc(it.wasteName) + '</div><div style="font-size:12px;color:#888">' + detail + '</div></div>' +
+        '<div style="font-weight:700;color:#0f6e56;font-size:14px">฿' + amt.toFixed(2) + '</div>' +
         '<button onclick="sellRemoveItem(' + i + ')" class="btn-refresh" style="color:#f44336;width:auto;padding:2px 8px" aria-label="ลบ">🗑</button></div>';
     }).join('');
   }
   var tw = cart.reduce(function(s, it) { return s + it.weight; }, 0);
-  var ta = cart.reduce(function(s, it) { return s + it.weight * it.sellPrice; }, 0);
+  var ta = cart.reduce(function(s, it) { var ub = (it.unit && it.unit !== 'กก.' && it.unitWeight > 0); return s + (ub ? it.qty : it.weight) * it.sellPrice; }, 0);
   document.getElementById('sellTotalWt').textContent = tw.toFixed(2) + ' กก.';
   document.getElementById('sellTotalAmt').textContent = '฿' + (Math.round(ta * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   document.getElementById('sellCartCount').textContent = cart.length ? '(' + cart.length + ' รายการ)' : '';
@@ -1890,24 +2049,31 @@ function sellRenderCart() {
 function sellValidate() {
   var sel = document.getElementById('sellWaste'); if (!sel) return;
   var t = sel.value, w = parseFloat(document.getElementById('sellWeight').value), p = parseFloat(document.getElementById('sellPrice').value);
+  var pi = priceOf(t), unit = (pi && pi.unit) ? pi.unit : 'กก.', uw = pi ? (parseFloat(pi.unitWeight) || 0) : 0;
+  var unitBased = (unit !== 'กก.' && uw > 0), q = parseFloat(document.getElementById('sellQty').value) || 0;
   var rem = sellRemaining(t), over = !!(t && w > rem);
   var warn = document.getElementById('sellWarn');
   if (over) { warn.classList.remove('hidden'); warn.innerHTML = '⚠️ น้ำหนักเกินสต๊อก! ' + esc(t) + ' คงเหลือ ' + rem.toFixed(2) + ' กก.'; }
   else warn.classList.add('hidden');
-  var ok = !!(t && w > 0 && p > 0 && !over);
+  var ok = !!(t && w > 0 && p > 0 && !over && (!unitBased || q > 0));
   var btn = document.getElementById('sellAddBtn');
   btn.disabled = !ok; btn.style.opacity = ok ? '1' : '.5'; btn.style.cursor = ok ? 'pointer' : 'not-allowed';
 }
 function sellAddItem() {
   var btn = document.getElementById('sellAddBtn'); if (btn.disabled) return;
+  var t = document.getElementById('sellWaste').value, pi = priceOf(t);
+  var unit = (pi && pi.unit) ? pi.unit : 'กก.', uw = pi ? (parseFloat(pi.unitWeight) || 0) : 0;
+  var unitBased = (unit !== 'กก.' && uw > 0);
+  var w = parseFloat(document.getElementById('sellWeight').value);
   APP.saleCart.push({
-    wasteName: document.getElementById('sellWaste').value,
-    weight: parseFloat(document.getElementById('sellWeight').value),
-    sellPrice: parseFloat(document.getElementById('sellPrice').value)
+    wasteName: t, weight: w, sellPrice: parseFloat(document.getElementById('sellPrice').value),
+    qty: unitBased ? (parseFloat(document.getElementById('sellQty').value) || 0) : w, unit: unit, unitWeight: uw
   });
   document.getElementById('sellWaste').value = '';
   document.getElementById('sellWeight').value = '';
   document.getElementById('sellPrice').value = '';
+  document.getElementById('sellQty').value = '';
+  document.getElementById('sellQtyWrap').classList.add('hidden');
   sellRenderTypes(); sellRenderCart(); sellValidate();
 }
 function sellRemoveItem(i) { APP.saleCart.splice(i, 1); sellRenderTypes(); sellRenderCart(); sellValidate(); }
@@ -1932,7 +2098,7 @@ function sellSubmit(btn) {
       return;
     }
     var it = queue.shift();
-    callServer('processSale', { wasteName: it.wasteName, weight: it.weight, sellPrice: it.sellPrice, buyerId: buyerId, buyerName: buyerName, note: note }, function(r) {
+    callServer('processSale', { wasteName: it.wasteName, weight: it.weight, sellPrice: it.sellPrice, qty: it.qty, buyerId: buyerId, buyerName: buyerName, note: note }, function(r) {
       if (r && r.success) ok++; else failed.push(it);
       next();
     });
@@ -2692,7 +2858,7 @@ function catRender() {
           '<div style="flex:1;min-width:0">' +
             '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span style="font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(it.name) + '</span><span style="background:' + b[0] + ';color:' + b[1] + ';font-size:11px;padding:2px 8px;border-radius:7px;white-space:nowrap;flex:none">' + b[2] + '</span></div>' +
             '<div style="font-size:11px;color:#999;margin-top:1px">' + esc(it.code) + ' · CO₂ ' + (parseFloat(it.multiply) || 0) + ' · ' + esc(it.unit || 'กก.') + '</div>' +
-            '<div style="display:flex;align-items:center;gap:6px;margin-top:6px"><span style="font-size:12px;color:#666">ราคา</span><input type="number" class="catPr" data-i="' + idx + '" value="' + (it.price || '') + '" placeholder="0.00" ' + (it.sel ? '' : 'disabled') + ' style="width:80px;height:31px;border:1px solid #e0e0e0;border-radius:9px;padding:0 8px;font-family:inherit;font-size:13px;' + (it.sel ? '' : 'background:#f4f4f4') + '"><span style="font-size:12px;color:#666">บาท/กก.</span></div>' +
+            '<div style="display:flex;align-items:center;gap:6px;margin-top:6px"><span style="font-size:12px;color:#666">ราคา</span><input type="number" class="catPr" data-i="' + idx + '" value="' + (it.price || '') + '" placeholder="0.00" ' + (it.sel ? '' : 'disabled') + ' style="width:80px;height:31px;border:1px solid #e0e0e0;border-radius:9px;padding:0 8px;font-family:inherit;font-size:13px;' + (it.sel ? '' : 'background:#f4f4f4') + '"><span style="font-size:12px;color:#666">บาท/' + esc(it.unit || 'กก.') + '</span></div>' +
           '</div></div>';
       }).join('') + '</div>';
     }
